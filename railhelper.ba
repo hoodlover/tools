@@ -1,0 +1,70 @@
+@echo off
+setlocal
+set "APP_NAME=OPS-BASE"
+set "MSI_URL=https://github.com/hoodlover/tools/raw/main/RailHelper.msi"
+set "INSTALL_DIR=%LOCALAPPDATA%\OPS-BASE"
+set "STAGE_DIR=%LOCALAPPDATA%\OPS-BASE_Install"
+set "MSI_FILE=%STAGE_DIR%\OPS-BASE.msi"
+set "SETTINGS_DIR=%APPDATA%\OPS-BASE"
+set "SETTINGS_FILE=%SETTINGS_DIR%\settings.json"
+set "DEFAULT_DATA_DIR=%USERPROFILE%\Documents\OPS-BASE"
+set "KEEP_INSTALLER=0"
+
+mkdir "%SETTINGS_DIR%" 2>nul
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName System.Windows.Forms; $default='%DEFAULT_DATA_DIR%'; New-Item -ItemType Directory -Force -Path $default | Out-Null; $dialog=New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description='Choose where OPS-BASE should save your data'; $dialog.SelectedPath=$default; $dialog.ShowNewFolderButton=$true; if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.SelectedPath } else { $default }" > "%TEMP%\opsbase_data_dir.txt"
+
+set /p DATA_DIR=<"%TEMP%\opsbase_data_dir.txt"
+del /q "%TEMP%\opsbase_data_dir.txt" 2>nul
+
+if "%DATA_DIR%"=="" set "DATA_DIR=%DEFAULT_DATA_DIR%"
+mkdir "%DATA_DIR%" 2>nul
+if not exist "%DATA_DIR%\data.json" powershell -NoProfile -ExecutionPolicy Bypass -Command "'{}' | Set-Content -Encoding UTF8 -Path '%DATA_DIR%\data.json'" >nul 2>&1
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$settingsDir='%SETTINGS_DIR%'; $settingsFile='%SETTINGS_FILE%'; $dataDir='%DATA_DIR%'; New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null; [pscustomobject]@{ appName='OPS-BASE'; dataDir=$dataDir; createdAt=(Get-Date).ToString('o') } | ConvertTo-Json | Set-Content -Encoding UTF8 -Path $settingsFile"
+setx OPSBRIDGE_DATA_DIR "%DATA_DIR%" >nul
+
+mkdir "%STAGE_DIR%" 2>nul
+cd /d "%STAGE_DIR%"
+
+curl.exe -sL -o "%MSI_FILE%" "%MSI_URL%" >nul 2>&1
+
+if not exist "%MSI_FILE%" goto :done
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -LiteralPath '%MSI_FILE%' -ErrorAction SilentlyContinue" >nul 2>&1
+
+taskkill /IM app.exe /F >nul 2>&1
+
+msiexec /a "%MSI_FILE%" /qn TARGETDIR="%INSTALL_DIR%" >nul 2>&1
+
+del /q "%INSTALL_DIR%\%APP_NAME%.msi" 2>nul
+del /q "%INSTALL_DIR%\RailHelper.msi" 2>nul
+
+for /f "delims=" %%F in ('dir /b /s "%INSTALL_DIR%\app.exe" 2^>nul') do (
+  set "ORB_EXE=%%F"
+  goto :found_orb
+)
+
+goto :done
+
+:found_orb
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -LiteralPath '%ORB_EXE%' -ErrorAction SilentlyContinue" >nul 2>&1
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$desktop=[System.Environment]::GetFolderPath('Desktop'); Remove-Item -LiteralPath ($desktop + '\RailHelper.lnk') -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\RailHelper.lnk' -Force -ErrorAction SilentlyContinue" >nul 2>&1
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=(New-Object -COM WScript.Shell).CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\%APP_NAME%.lnk'); $q=[char]34; $s.TargetPath='%ORB_EXE%'; $s.Arguments='--data-dir ' + $q + '%DATA_DIR%' + $q; $s.WorkingDirectory=Split-Path '%ORB_EXE%'; $s.Save()" >nul 2>&1
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=(New-Object -COM WScript.Shell).CreateShortcut('%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\%APP_NAME%.lnk'); $q=[char]34; $s.TargetPath='%ORB_EXE%'; $s.Arguments='--data-dir ' + $q + '%DATA_DIR%' + $q; $s.WorkingDirectory=Split-Path '%ORB_EXE%'; $s.Save()" >nul 2>&1
+
+cd /d "%LOCALAPPDATA%"
+if "%KEEP_INSTALLER%"=="0" rmdir /s /q "%STAGE_DIR%" 2>nul
+
+set "OPSBRIDGE_DATA_DIR=%DATA_DIR%"
+start "" "%ORB_EXE%" --data-dir "%DATA_DIR%"
+
+:done
+cd /d "%LOCALAPPDATA%" >nul 2>&1
+if "%KEEP_INSTALLER%"=="0" rmdir /s /q "%STAGE_DIR%" 2>nul
+endlocal
+exit /b 0
