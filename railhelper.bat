@@ -12,12 +12,7 @@ set "KEEP_INSTALLER=0"
 
 mkdir "%SETTINGS_DIR%" 2>nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName System.Windows.Forms; $default='%DEFAULT_DATA_DIR%'; New-Item -ItemType Directory -Force -Path $default | Out-Null; $dialog=New-Object System.Windows.Forms.FolderBrowserDialog; $dialog.Description='Choose where OPS-BASE should save your data'; $dialog.SelectedPath=$default; $dialog.ShowNewFolderButton=$true; if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.SelectedPath } else { $default }" > "%TEMP%\opsbase_data_dir.txt"
-
-set /p DATA_DIR=<"%TEMP%\opsbase_data_dir.txt"
-del /q "%TEMP%\opsbase_data_dir.txt" 2>nul
-
-if "%DATA_DIR%"=="" set "DATA_DIR=%DEFAULT_DATA_DIR%"
+set "DATA_DIR=%DEFAULT_DATA_DIR%"
 mkdir "%DATA_DIR%" 2>nul
 if not exist "%DATA_DIR%\data.json" powershell -NoProfile -ExecutionPolicy Bypass -Command "'{}' | Set-Content -Encoding UTF8 -Path '%DATA_DIR%\data.json'" >nul 2>&1
 
