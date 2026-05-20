@@ -23,6 +23,18 @@ del /q "%TEMP%\opsbase_data_dir.txt" >nul 2>&1
 if "%DATA_DIR%"=="" set "DATA_DIR=%DEFAULT_DATA_DIR%"
 mkdir "%DATA_DIR%" >nul 2>&1
 
+REM ---------- Snapshot data.json before reinstalling ----------
+REM If the user has an existing data.json with their edits, copy it to
+REM %DATA_DIR%\backups\data-<timestamp>.json so a reinstall is always
+REM reversible. Same backups/ folder + filename pattern the webapp's
+REM Topbar > Backup menu already uses; the Restore picker there will
+REM list these alongside its own snapshots.
+if exist "%DATA_DIR%\data.json" (
+  mkdir "%DATA_DIR%\backups" >nul 2>&1
+  for /f "delims=" %%T in ('powershell -NoProfile -Command "(Get-Date).ToString('yyyy-MM-ddTHH-mm-ss')"') do set "BACKUP_TS=%%T"
+  copy /Y "%DATA_DIR%\data.json" "%DATA_DIR%\backups\data-%BACKUP_TS%.json" >nul 2>&1
+)
+
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$settingsDir='%SETTINGS_DIR%'; $settingsFile='%SETTINGS_FILE%'; $dataDir='%DATA_DIR%'; New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null; [pscustomobject]@{ appName='OPS-BASE'; dataDir=$dataDir; createdAt=(Get-Date).ToString('o') } | ConvertTo-Json | Set-Content -Encoding UTF8 -Path $settingsFile" >nul 2>&1
 setx OPSBRIDGE_DATA_DIR "%DATA_DIR%" >nul
 
